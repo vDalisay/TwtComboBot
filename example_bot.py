@@ -1,19 +1,19 @@
 # This example requires the 'message_content' intent.
 
 from datetime import timedelta
-from types import NoneType
 from unicodedata import name
 import discord
 import re
 from discord.utils import get
 from dotenv import load_dotenv
 import os
-from discord import app_commands
 from discord.ext import commands
+import socket 
+
 load_dotenv(".env")
 TOKEN = os.getenv('TOKEN')
 intents = discord.Intents.default()
-intents.message_content = True
+#intents.message_content = True
 
 client = discord.Client(intents=intents)
 
@@ -24,15 +24,25 @@ twtBaseURL = 'https://timewilltell.forumotion.com/'
 topicURL = ''
 
 
-twtTagBoxChannelId = 974039783095537714
 LTgeneralchannelId = 899629505067511831
 LTddchannelId = 1018550654639292576
+
+twtTagBoxChannelId = 974039783095537714
 botChannelId = 982355182367174736
 generalId = 969308979270402158
 plotTalkId = 969306319309930617
 gmHubId = 973980526744571904
+announcementId = 969308725531783218
 
-channelId = twtTagBoxChannelId
+async def getChannel():
+    if("VincentY740" in socket.gethostname()):
+        print("Listening on LTGeneral")
+        return LTgeneralchannelId
+    else:
+        print("Listening on TwTTagBoxChannel")
+        return twtTagBoxChannelId
+        
+channelId = 0
 userChannels = [ LTgeneralchannelId, botChannelId, twtTagBoxChannelId]
 adminChannels = [LTddchannelId, LTgeneralchannelId, gmHubId ]
 
@@ -73,6 +83,42 @@ emojiList = {
              29: "<:29:1018894865582522388>", 
              30: "<:30:1018894866937286716>",
              }
+
+reverseEmojiList = {
+             1018865741862281316: 1, 
+             1018865743074435213: 2, 
+             1018865744815075339: 3, 
+             1018865746211786782: 4, 
+             1018865747432316998: 5, 
+             1018865748573179906: 6, 
+             1018865750615793754: 7, 
+             1018865754336145468: 8, 
+             1018865755883843624: 9, 
+             1018865757515419688: 10,
+             1018865759939735573: 11, 
+             1018865761290289213: 12,
+             1018865762556985384: 13, 
+             1018865764045955112: 14, 
+             1018865765010657353: 15, 
+             1018865767107805224: 16, 
+             1018865768630337547: 17, 
+             1018865770429693952: 18, 
+             1018865771516018768: 19, 
+             1018865772715581490: 20,
+             1018894853788139620: 21, 
+             1018894855038042112: 22,
+             1018894856396996730: 23, 
+             1018894857709822093: 24, 
+             1018894859307859968: 25, 
+             1018894860633256028: 26, 
+             1018894861816053873: 27, 
+             1018894864122904607: 28, 
+             1018894865582522388: 29, 
+             1018894866937286716: 30,
+             }
+
+announcementTriggers = {}
+            
 #HIGHSCORE
 async def addToHighScore(topic, streakScore):
     if streakScore < 2:
@@ -95,20 +141,12 @@ async def remove(msg):
     topic = msg.content.split('=')[1]
     del highScore[topic]
 
-async def switchChannel(msg, _channelId):
-    if(msg.channel.id == twtTagBoxChannelId):
-        _channelId = LTgeneralchannelId
-    else:
-        _channelId = twtTagBoxChannelId
-
-    await msg.reply(f"Channel switched to {channelId}!")
-    return
-
 async def info(ctx):
     embed=discord.Embed(title="Info Log", description="This info is meant for the developer aka @Draak", color=0xFF5733)
     embed.add_field(name=f'**Channel**', value=f'> channelID: {channelId}',inline=False)
+    embed.add_field(name=f'**Host**', value=f'> name: {socket.gethostname}',inline=False)
     await ctx.send(embed=embed)
-
+    
     
 async def embed(ctx):
     embed=discord.Embed(title="Top 5 TimeWillTell Combo Scores", description="Who has retained the favor of the dragon the longest?", color=0xFF5733)
@@ -122,6 +160,26 @@ async def trimTopicForHS(topic):
     withoutNum = topic.split('#')[0]
     topicName = withoutNum.split('/')[-1]
     return topicName
+
+async def setAnnouncement(_title, _description, _color=0x00FF00, _thumbnail='', trigger='', winner=''):
+    embed=discord.Embed(title=_title, description=_description, color=_color, thumbnail=_thumbnail)
+    embed.set_author(name=f"{winner}")
+    announcementTriggers[int(trigger)] = embed
+
+async def checkAnnouncementTriggers(newScore, author):
+    if(len(announcementTriggers) == 0):
+        return
+    if(announcementTriggers.get(newScore) is not None):
+        embed = announcementTriggers.get(newScore)
+        
+        if(embed.author.name is ''):
+            embed.remove_author()
+        else:
+            embed.set_author(name=f"{author.name} triggered an event!", icon_url=author.avatar_url)  
+
+        channel = client.get_channel(LTddchannelId)
+        await channel.send(embed=embed)
+        announcementTriggers.pop(newScore)
     
 #REACTIONS
 async def getTopicUrl(sentence):
@@ -148,16 +206,27 @@ async def filterMessages(pastMessages, topic):
     return filteredMsgs
 
 async def addReactions(topicMsgs):
-    streakCount = len(topicMsgs)
-    if(streakCount < 2): 
-        return
-    
+
+    #Seting new combo
+    if(len(topicMsgs) == 2):
+        newScore = 2
+    else:
+        newScore = await getCurrentComboCount(topicMsgs[1]) + 1
+
     await filteredMsgs[0].add_reaction(kwakId)
 
-    await filteredMsgs[0].add_reaction(emojiList[streakCount])
+    await filteredMsgs[0].add_reaction(emojiList[newScore])
 
     await filteredMsgs[0].add_reaction(parrotId)
+
+    return newScore
     
+async def getCurrentComboCount(lastStreakMsg):
+    for reaction in lastStreakMsg.reactions:
+        if(hasattr(reaction.emoji,'id')):
+            if reverseEmojiList.get(reaction.emoji.id) is not None:
+                return reverseEmojiList.get(reaction.emoji.id)
+
 def reset():
     topicURL = ''
     filteredMsgs.clear()
@@ -174,6 +243,8 @@ async def getMsgHistory(msgTime):
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
+    global channelId 
+    channelId = await getChannel()
 
 @client.event
 async def on_message(message):
@@ -190,25 +261,48 @@ async def on_message(message):
             await message.reply(f"Score removed!")
         if(message.content.startswith("!info")):
             await info(message.channel)
+        if(message.content.startswith("!setAnnouncement")):
+            if(len(message.content.split('=')) < 2):
+                await message.reply("Format is: !setAnnouncement =<title> =<description> =<color(optional)> =<thumbnail(optional)> =<trigger(optional)> =<winner(optional)>")
+            else:
+                content = message.content.split('=')
+                params = []
+                for x in range(1,7):
+                    try:
+                        params.append(content[x])
+                    except IndexError:
+                        params.append(None)
+
+                await setAnnouncement(params[0], params[1], 0xFF5733, params[3], params[4], params[5])
+                await message.reply("Announcement set with following info:" + str(params))
+                print(params)
 
     if message.channel.id != channelId: 
         return
     
     reset()
-
+    
     print('<--------------------START-------------------->')
     topicURL = await getTopicUrl(message.content)
 
     if type(topicURL) is not str: 
         print('topicUrl not found: ' + str(topicURL))
         return
-
+    
     filteredMsgs = await getMsgHistory(message.created_at)
 
     topicMsgs = await filterMessages(filteredMsgs, topicURL)
 
-    await addReactions(topicMsgs)
-    await addToHighScore(topicURL, len(topicMsgs))
+    if(len(topicMsgs) < 2): #means its not a streak
+        reset()
+        print('New first topic posted!')
+        return
+
+    score = await addReactions(topicMsgs)
+    
+    await checkAnnouncementTriggers(score, topicMsgs[0].author)
+    
+    await addToHighScore(topicURL, score)
 
     print('(Mine) LatestMsg: ' + filteredMsgs[0].content)
     if(len(filteredMsgs) > 1):
