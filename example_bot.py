@@ -13,7 +13,6 @@ import socket
 load_dotenv(".env")
 TOKEN = os.getenv('TOKEN')
 intents = discord.Intents.default()
-#intents.message_content = True
 
 client = discord.Client(intents=intents)
 
@@ -32,7 +31,7 @@ botChannelId = 982355182367174736
 generalId = 969308979270402158
 plotTalkId = 969306319309930617
 gmHubId = 973980526744571904
-announcementId = 969308725531783218
+twtAnnouncementId = 969308725531783218
 
 async def getChannel():
     if("VincentY740" in socket.gethostname()):
@@ -41,8 +40,17 @@ async def getChannel():
     else:
         print("Listening on TwTTagBoxChannel")
         return twtTagBoxChannelId
-        
+
+async def getBotAnnouncementChannel():
+    if("VincentY740" in socket.gethostname()):
+        print("Announcement channel: LTddchannelId")
+        return LTddchannelId
+    else:
+        print("Announcement channel: plotTalkId")
+        return plotTalkId
+
 channelId = 0
+botAnnouncementsId = 0
 userChannels = [ LTgeneralchannelId, botChannelId, twtTagBoxChannelId]
 adminChannels = [LTddchannelId, LTgeneralchannelId, gmHubId ]
 
@@ -161,10 +169,17 @@ async def trimTopicForHS(topic):
     topicName = withoutNum.split('/')[-1]
     return topicName
 
-async def setAnnouncement(_title, _description, _color=0x00FF00, _thumbnail='', trigger='', winner=''):
-    embed=discord.Embed(title=_title, description=_description, color=_color, thumbnail=_thumbnail)
-    embed.set_author(name=f"{winner}")
-    announcementTriggers[int(trigger)] = embed
+async def setAnnouncement(message):
+    rgb = eval(announcementContent["twtColor"])
+    twtColor = discord.Colour.from_rgb(rgb[0], rgb[1], rgb[2])
+    embed=discord.Embed(title=announcementContent["twtTitle"], description=announcementContent["twtDescription"], colour=twtColor )
+    embed.set_thumbnail(url=announcementContent["twtThumbnail"])
+    embed.set_author(name=announcementContent["twtWinner"])
+
+    announcementTriggers[int(announcementContent["twtTrigger"])] = embed
+    
+    await message.reply("Sending a preview of the announcement:")
+    await message.channel.send(embed=embed)
 
 async def checkAnnouncementTriggers(newScore, author):
     if(len(announcementTriggers) == 0):
@@ -172,12 +187,10 @@ async def checkAnnouncementTriggers(newScore, author):
     if(announcementTriggers.get(newScore) is not None):
         embed = announcementTriggers.get(newScore)
         
-        if(embed.author.name is ''):
-            embed.remove_author()
-        else:
+        if(embed.author.name is not ""):
             embed.set_author(name=f"{author.name} triggered an event!", icon_url=author.avatar_url)  
 
-        channel = client.get_channel(LTddchannelId)
+        channel = client.get_channel(botAnnouncementsId)
         await channel.send(embed=embed)
         announcementTriggers.pop(newScore)
     
@@ -240,42 +253,101 @@ async def getMsgHistory(msgTime):
     historyMsgList.reverse()
     return historyMsgList
 
+#COMMAND HANDLING
+async def handleUserCommands(message):
+    if(message.content.startswith('!score')):
+        await embed(message.channel)
+
+async def handleAdminCommands(message):
+    if(message.content.startswith('!reset')):
+        await wipe()
+        await message.reply(f"Highscores reset!")
+    if(message.content.startswith('!remove')):
+        await remove(message)
+        await message.reply(f"Score removed!")
+    if(message.content.startswith("!info")):
+        await info(message.channel)
+    if(message.content.startswith("!setAnnouncement")):
+        await handleSetAnnouncement(message)
+
+#Help Command (REVAMP LATER)
+async def handleHelpCommand(message):
+    embed=discord.Embed(title="Set Announcement Help", description="Start a command with !setAnnouncement and follow up with any of the below content options that you want to fill.\n The required content options are: \n - _twtTitle_ \n - _twtDescription_ \n - _twtTrigger_ \n To use these, look at the example below. Other content options that you want to fill can be added as you wish or be left out. \n", color=0xFF5733)
+    embed.add_field(name=f'**Example command:**', value=f'!setAnnouncement \n ^twtTitle \n _This is a test title_ \n ^twtDescription \n _Here you can describe what your announcement or trigger is all about!_ \n ^twtTrigger \n _15_ \n ',inline=False)
+    embed.add_field(name='**---------------**', value='\nㅤ', inline=False)
+    embed.add_field(name=f'**^twtTitle**', value=f'Displays the given input as the title for the announcement. \n --- \n **Example:** \n _^twtTitle_ \n This example title roars loudly!',inline=True)
+    embed.add_field(name=f'**^twtDescription**', value=f'Displays the given input as the description for the announcement. \n Formatting supports anything discord can do so **bold** text can be achieved by surrounding words with double "*" etc.\n --- \n **Example:** \n _^twtDescription_ \n The roar from the _example title_ is heard all throughout the realm. \n \n The people of Odyria are even fleeing below the top section of this example description!',inline=True)
+    embed.add_field(name=f'**^twtTrigger**', value=f'Given a number as input, the trigger will correspond to the streak count needed in order for the announcement to be placed. \n The first time a streak has been achieved that matches your trigger count will prompt the bot to post the announcement. \n Multiple triggers at the same time can be set in advance! \n (e.g. one at 15, one at 20 and one at 30 but do not set two of them at the same streak count or set a count above the current max count of 30, no idea what happens then tbh)\n --- \n **Example:** \n _^twtTrigger_ \n 21 ',inline=False)
+    embed.add_field(name='**---------------**', value='\nㅤ', inline=False)
+    embed.add_field(name=f'**^twtColor** (optional)', value=f'Given an RGB input, this will change the sidecolor of the announcement. \n Use it by providing the individual RGB values of a color, just like you would in CSS. \n --- \n **Example:** \n _^twtColor_ \n 255,199,72',inline=True)
+    embed.add_field(name=f'**^twtThumbnail** (optional)', value=f'Given an URL that starts with http(s), it will display an extra image inside of the announcement. Only web links are allowed, local images are not supported. \n --- \n **Example:** \n _^twtThumbnail_ \n https://awoiaf.westeros.org/images/thumb/d/d4/Aegon_on_Balerion.jpg/1200px-Aegon_on_Balerion.jpg',inline=True)
+    embed.add_field(name=f'**^twtWinner** (optional)', value=f'If you want to show the person that has triggered the announcement/event inside of the announcement, you can use this option. \n Using this option will add the name and avatar of the person inside of the announcement with the following format text: _(Insert person name) triggered an event!_ \n --- \n **Example:** \n _^twtWinner_ \n Yes \n _(You can put any text here to opt in, even putting in "No" will opt you in, its more about text being present here)_',inline=True)
+    embed.add_field(name='**---------------**', value='\nㅤ', inline=False)
+    embed.add_field(name=f'**Quick Copy Paste**', value=f'!setAnnouncement \n ^twtTitle \n ^twtDescription \n ^twtTrigger \n ^twtColor \n ^twtThumbnail \n ^twtWinner',inline=True)
+    
+    await message.channel.send(embed=embed)
+
+#Announcement Command
+async def handleSetAnnouncement(message):
+    if(len(message.content.split('^')) < 2):
+        await handleHelpCommand(message)
+        return
+    await getAnnouncementContents(message)
+    await setAnnouncement(message)
+    global announcementContent
+    announcementContent = {
+    "twtTitle": "",
+    "twtDescription": "",
+    "twtColor": 0,
+    "twtTrigger": 0,
+    "twtThumbnail": "",
+    "twtWinner": ""
+    }
+
+announcementContent = {
+    "twtTitle": "",
+    "twtDescription": "",
+    "twtColor": 0,
+    "twtTrigger": 0,
+    "twtThumbnail": "",
+    "twtWinner": ""
+}
+
+async def getAnnouncementContents(commandMsg):
+    snippets =  commandMsg.content.split("^")
+    annoucementKeys = announcementContent.copy()
+
+    print("--Announcement Content Start--")
+    for twtParam in annoucementKeys.keys():
+        for piece in snippets:
+            if piece.startswith(twtParam):
+                if(twtParam is not "twtDescription"):
+                    key = piece.replace("\n", " ").split(' ')[0]
+                else:
+                    key = piece.split(' ')[0]
+                
+                value = piece.split(twtParam)[1:]
+                value = [s for s in value if not value == '']
+                announcementContent[key] = value[0]
+                
+                break
+    print("--Announcement Content End--")
+
+#EVENTS
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
-    global channelId 
+    global channelId, botAnnouncementsId 
     channelId = await getChannel()
+    botAnnouncementsId = await getBotAnnouncementChannel()
 
 @client.event
 async def on_message(message):
     if message.author == client.user: return    
     if message.channel.id in userChannels:
-        if(message.content.startswith('!score')):
-            await embed(message.channel)
+        await handleUserCommands(message)
     elif(message.channel.id in adminChannels):
-        if(message.content.startswith('!reset')):
-            await wipe()
-            await message.reply(f"Highscores reset!")
-        if(message.content.startswith('!remove')):
-            await remove(message)
-            await message.reply(f"Score removed!")
-        if(message.content.startswith("!info")):
-            await info(message.channel)
-        if(message.content.startswith("!setAnnouncement")):
-            if(len(message.content.split('=')) < 2):
-                await message.reply("Format is: !setAnnouncement =<title> =<description> =<color(optional)> =<thumbnail(optional)> =<trigger(optional)> =<winner(optional)>")
-            else:
-                content = message.content.split('=')
-                params = []
-                for x in range(1,7):
-                    try:
-                        params.append(content[x])
-                    except IndexError:
-                        params.append(None)
-
-                await setAnnouncement(params[0], params[1], 0xFF5733, params[3], params[4], params[5])
-                await message.reply("Announcement set with following info:" + str(params))
-                print(params)
+        await handleAdminCommands(message)
 
     if message.channel.id != channelId: 
         return
@@ -284,7 +356,6 @@ async def on_message(message):
     
     print('<--------------------START-------------------->')
     topicURL = await getTopicUrl(message.content)
-
     if type(topicURL) is not str: 
         print('topicUrl not found: ' + str(topicURL))
         return
