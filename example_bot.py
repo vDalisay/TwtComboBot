@@ -5,14 +5,14 @@ from unicodedata import name
 import discord
 import re
 from discord.utils import get
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 from discord.ext import commands
 import socket 
 
 load_dotenv(".env")
-TOKEN = os.getenv('TOKEN')
-intents = discord.Intents.default()
+TOKEN = "MTAxNzc1MDUyMjMwMTc5NjQ1NA.GaU9Ng.XhmgLPMli-QQR_rm4o5s0FwAF35596JGU50DhM"
+intents = discord.Intents.all()
 
 client = discord.Client(intents=intents)
 
@@ -34,7 +34,7 @@ gmHubId = 973980526744571904
 twtAnnouncementId = 969308725531783218
 
 async def getChannel():
-    if("VincentY740" in socket.gethostname()):
+    if("Vincent-Desktop" in socket.gethostname()):
         print("Listening on LTGeneral")
         return LTgeneralchannelId
     else:
@@ -42,7 +42,7 @@ async def getChannel():
         return twtTagBoxChannelId
 
 async def getBotAnnouncementChannel():
-    if("VincentY740" in socket.gethostname()):
+    if("Vincent-Desktop" in socket.gethostname()):
         print("Announcement channel: LTddchannelId")
         return LTddchannelId
     else:
@@ -184,10 +184,10 @@ async def setAnnouncement(message):
 async def checkAnnouncementTriggers(newScore, author):
     if(len(announcementTriggers) == 0):
         return
-    if(announcementTriggers.get(newScore) is not None):
+    if(announcementTriggers.get(newScore) != None):
         embed = announcementTriggers.get(newScore)
         
-        if(embed.author.name is not ""):
+        if(embed.author.name != ""):
             embed.set_author(name=f"{author.name} triggered an event!", icon_url=author.avatar_url)  
 
         channel = client.get_channel(botAnnouncementsId)
@@ -321,7 +321,7 @@ async def getAnnouncementContents(commandMsg):
     for twtParam in annoucementKeys.keys():
         for piece in snippets:
             if piece.startswith(twtParam):
-                if(twtParam is not "twtDescription"):
+                if(twtParam != "twtDescription"):
                     key = piece.replace("\n", " ").split(' ')[0]
                 else:
                     key = piece.split(' ')[0]
