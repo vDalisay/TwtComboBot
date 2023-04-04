@@ -11,7 +11,7 @@ from discord.ext import commands
 import socket 
 
 load_dotenv(".env")
-TOKEN = "MTAxNzc1MDUyMjMwMTc5NjQ1NA.GaU9Ng.XhmgLPMli-QQR_rm4o5s0FwAF35596JGU50DhM"
+TOKEN = "" #Cant be uploaded in git, change locally or something and deploy it (hide this variable to do it cleanly)
 intents = discord.Intents.all()
 
 client = discord.Client(intents=intents)
